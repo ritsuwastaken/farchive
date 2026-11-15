@@ -4,8 +4,12 @@ reader and writer for unreal engine 1, 2 and 3 binary data
 
 ## Usage
 
+```bash
+npm i @ritsuwastaken/farchive
+```
+
 ```ts
-import { Reader, Writer } from "farchive";
+import { Reader, Writer } from "@ritsuwastaken/farchive";
 
 const reader = new Reader(bytes, { version: 123 });
 const count = reader.index();
@@ -20,7 +24,7 @@ const out = writer.result();
 ## 8-bit text
 
 ```ts
-import { decodeAnsi } from "farchive";
+import { decodeAnsi } from "@ritsuwastaken/farchive";
 
 decodeAnsi(reader.str(), "euc-kr");
 decodeAnsi(reader.str(), "windows-1251");
