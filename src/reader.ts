@@ -1,3 +1,4 @@
+import { compactIndex as compact, guidSize, maxIndex } from "./constants.ts";
 import { ArchiveError } from "./error.ts";
 import { versions } from "./versions.ts";
 
@@ -23,7 +24,7 @@ export const usesCompactIndex = (version: number | undefined) => version === und
 
 export class Reader {
   readonly bytes: Uint8Array;
-  readonly view: DataView;
+  private readonly view: DataView;
   readonly version: number | undefined;
   readonly licensee: number | undefined;
   offset: number;
@@ -65,43 +66,72 @@ export class Reader {
     return value;
   }
 
-  private fixed<T>(size: number, read: (at: number) => T): T {
+  private advance(size: number): number {
     this.need(size);
-    const value = read(this.offset);
+    const at = this.offset;
     this.offset += size;
-    return value;
+    return at;
   }
 
-  u8 = (): number => this.fixed(1, (at) => this.view.getUint8(at));
-  i8 = (): number => this.fixed(1, (at) => this.view.getInt8(at));
-  u16 = (): number => this.fixed(2, (at) => this.view.getUint16(at, true));
-  i16 = (): number => this.fixed(2, (at) => this.view.getInt16(at, true));
-  u32 = (): number => this.fixed(4, (at) => this.view.getUint32(at, true));
-  i32 = (): number => this.fixed(4, (at) => this.view.getInt32(at, true));
-  u64 = (): bigint => this.fixed(8, (at) => this.view.getBigUint64(at, true));
-  i64 = (): bigint => this.fixed(8, (at) => this.view.getBigInt64(at, true));
-  f32 = (): number => this.fixed(4, (at) => this.view.getFloat32(at, true));
-  f64 = (): number => this.fixed(8, (at) => this.view.getFloat64(at, true));
+  u8(): number {
+    return this.view.getUint8(this.advance(1));
+  }
+
+  i8(): number {
+    return this.view.getInt8(this.advance(1));
+  }
+
+  u16(): number {
+    return this.view.getUint16(this.advance(2), true);
+  }
+
+  i16(): number {
+    return this.view.getInt16(this.advance(2), true);
+  }
+
+  u32(): number {
+    return this.view.getUint32(this.advance(4), true);
+  }
+
+  i32(): number {
+    return this.view.getInt32(this.advance(4), true);
+  }
+
+  u64(): bigint {
+    return this.view.getBigUint64(this.advance(8), true);
+  }
+
+  i64(): bigint {
+    return this.view.getBigInt64(this.advance(8), true);
+  }
+
+  f32(): number {
+    return this.view.getFloat32(this.advance(4), true);
+  }
+
+  f64(): number {
+    return this.view.getFloat64(this.advance(8), true);
+  }
 
   compactIndex(): number {
     const start = this.offset;
-    const b0 = this.u8();
-    let value = b0 & 0x3f;
-    if (b0 & 0x40) {
-      let shift = 6;
-      for (let i = 1; i < 5; i++) {
+    const first = this.u8();
+    let value = first & compact.firstMask;
+    if (first & compact.firstHasMore) {
+      let shift = compact.firstBits;
+      for (let i = 1; i < compact.maxSize; i++) {
         const byte = this.u8();
-        if (i === 4) {
+        if (i === compact.maxSize - 1) {
           value += byte * 2 ** shift;
           break;
         }
-        value += (byte & 0x7f) * 2 ** shift;
-        shift += 7;
-        if (!(byte & 0x80)) break;
+        value += (byte & compact.mask) * 2 ** shift;
+        shift += compact.bits;
+        if (!(byte & compact.hasMore)) break;
       }
     }
-    if (value > 0x7fffffff) throw new ArchiveError("Compact index out of range", start);
-    return b0 & 0x80 ? -value : value;
+    if (value > maxIndex) throw new ArchiveError("Compact index out of range", start);
+    return first & compact.negative ? -value : value;
   }
 
   index(): number {
@@ -144,7 +174,7 @@ export class Reader {
   }
 
   guid(): Uint8Array {
-    return this.take(16);
+    return this.take(guidSize);
   }
 
   array<T>(read: (reader: this) => T): T[] {

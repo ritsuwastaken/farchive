@@ -1,11 +1,16 @@
+import { compactIndex as compact, guidSize, maxIndex } from "./constants.ts";
 import { ArchiveError } from "./error.ts";
 import { usesCompactIndex, type ArchiveOptions, type NameEntry, type NameRef } from "./reader.ts";
+import { isAnsi } from "./text.ts";
 import { versions } from "./versions.ts";
+
+const initialCapacity = 4096;
+const u32Mask = 0xffffffffn;
 
 export class Writer {
   readonly version: number | undefined;
   readonly licensee: number | undefined;
-  private buffer = new Uint8Array(1 << 12);
+  private buffer = new Uint8Array(initialCapacity);
   private view = new DataView(this.buffer.buffer);
   length = 0;
 
@@ -84,18 +89,18 @@ export class Writer {
   }
 
   compactIndex(value: number): void {
-    if (!Number.isInteger(value) || Math.abs(value) > 0x7fffffff) throw new ArchiveError(`Compact index out of range: ${value}`);
+    if (!Number.isInteger(value) || Math.abs(value) > maxIndex) throw new ArchiveError(`Compact index out of range: ${value}`);
     let rest = Math.abs(value);
-    const bytes = [(value < 0 ? 0x80 : 0) | (rest < 0x40 ? rest : (rest & 0x3f) | 0x40)];
-    if (rest >= 0x40) {
-      rest >>>= 6;
-      let i = 1;
-      for (; i < 4; i++) {
-        bytes.push(rest < 0x80 ? rest : (rest & 0x7f) | 0x80);
-        if (rest < 0x80) break;
-        rest >>>= 7;
+    const fits = rest <= compact.firstMask;
+    const bytes = [(value < 0 ? compact.negative : 0) | (fits ? rest : (rest & compact.firstMask) | compact.firstHasMore)];
+    if (!fits) {
+      rest >>>= compact.firstBits;
+      for (let i = 1; i < compact.maxSize; i++) {
+        const last = i === compact.maxSize - 1 || rest <= compact.mask;
+        bytes.push(last ? rest : (rest & compact.mask) | compact.hasMore);
+        if (last) break;
+        rest >>>= compact.bits;
       }
-      if (i === 4) bytes.push(rest);
     }
     this.bytes(Uint8Array.from(bytes));
   }
@@ -110,7 +115,7 @@ export class Writer {
       this.index(0);
       return;
     }
-    const wide = /[^\x00-\xff]/.test(value);
+    const wide = !isAnsi(value);
     const size = value.length + 1;
     this.index(wide ? -size : size);
     if (wide) {
@@ -125,7 +130,7 @@ export class Writer {
   }
 
   ansiz(value: string): void {
-    if (/[^\x01-\xff]/.test(value)) throw new ArchiveError("A null-terminated string must be Latin-1 without zero characters");
+    if (!isAnsi(value) || value.includes("\0")) throw new ArchiveError("A null-terminated string must be Latin-1 without zero characters");
     const at = this.reserve(value.length + 1);
     for (let i = 0; i < value.length; i++) this.buffer[at + i] = value.charCodeAt(i);
     this.buffer[at + value.length] = 0;
@@ -135,7 +140,7 @@ export class Writer {
     if (this.version !== undefined && this.version < versions.lengthPrefixedNames) this.ansiz(entry.name);
     else this.str(entry.name);
     if (this.version !== undefined && this.version >= versions.wideNameFlags) this.u64(entry.flags);
-    else this.u32(Number(entry.flags & 0xffffffffn));
+    else this.u32(Number(entry.flags & u32Mask));
   }
 
   name(ref: NameRef | number): void {
@@ -145,7 +150,7 @@ export class Writer {
   }
 
   guid(value: Uint8Array): void {
-    if (value.length !== 16) throw new ArchiveError(`A GUID is 16 bytes, got ${value.length}`);
+    if (value.length !== guidSize) throw new ArchiveError(`A GUID is ${guidSize} bytes, got ${value.length}`);
     this.bytes(value);
   }
 
