@@ -5,7 +5,7 @@ reader and writer for unreal engine 1, 2 and 3 binary data
 ## Usage
 
 ```bash
-npm i @ritsuwastaken/farchive
+npm install @ritsuwastaken/farchive
 ```
 
 ```ts
