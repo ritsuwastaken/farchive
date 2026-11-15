@@ -1,4 +1,4 @@
-# farchive
+# @ritsuwastaken/farchive
 
 reader and writer for unreal engine 1, 2 and 3 binary data
 
