@@ -1,6 +1,6 @@
 {
     "name": "@ritsuwastaken/farchive",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "description": "reader and writer for unreal engine 1, 2 and 3 binary data",
     "type": "module",
     "sideEffects": false,
