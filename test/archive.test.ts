@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { ArchiveError, decodeAnsi, Reader, versions, Writer } from "../src/index.ts";
+import { ArchiveError, Reader, versions, Writer } from "../src/index.ts";
 
 const bytes = (write: (writer: Writer) => void, version?: number) => {
   const writer = new Writer({ version });
@@ -112,11 +112,4 @@ test("the writer grows", () => {
     assert.deepEqual(reader.take(3), new Uint8Array([1, 2, 3]));
     assert.equal(reader.str(), "abc");
   }
-});
-
-test("8-bit text can be read in another code page", () => {
-  assert.equal(decodeAnsi("// \xb0\xa1\xb3\xaa", "euc-kr"), "// 가나");
-  assert.equal(decodeAnsi("\xcf\xf0\xe8\xe2\xe5\xf2", "windows-1251"), "Привет");
-  assert.equal(decodeAnsi("plain", "euc-kr"), "plain");
-  assert.equal(decodeAnsi("caf\xe9", "euc-kr"), null);
 });

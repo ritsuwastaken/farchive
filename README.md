@@ -20,12 +20,3 @@ writer.index(names.length);
 for (const entry of names) writer.nameEntry(entry);
 const out = writer.result();
 ```
-
-## 8-bit text
-
-```ts
-import { decodeAnsi } from "@ritsuwastaken/farchive";
-
-decodeAnsi(reader.str(), "euc-kr");
-decodeAnsi(reader.str(), "windows-1251");
-```
